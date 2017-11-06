@@ -27,7 +27,7 @@
 *  if set to 1+, ZSTD_decompress() can decode older formats (v0.1+)
 */
 #ifndef ZSTD_LEGACY_SUPPORT
-#  define ZSTD_LEGACY_SUPPORT 0
+#  define ZSTD_LEGACY_SUPPORT 1
 #endif
 
 /*!
