@@ -246,7 +246,7 @@ static void ZSTD_DCtx_resetParameters(ZSTD_DCtx* dctx)
     dctx->refMultipleDDicts = ZSTD_rmd_refSingleDDict;
 }
 
-static void ZSTD_initDCtx_internal(ZSTD_DCtx* dctx)
+void ZSTD_initDCtx_internal(ZSTD_DCtx* dctx)
 {
     dctx->staticSize  = 0;
     dctx->ddict       = NULL;

@@ -13,6 +13,8 @@ import (
 	"bytes"
 	"errors"
 	"io/ioutil"
+	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -128,6 +130,21 @@ func CompressLevel(dst, src []byte, level int) ([]byte, error) {
 	return dst[:written], nil
 }
 
+type zctx struct {
+	ctx *C.ZSTD_DCtx
+}
+
+var pool = sync.Pool{
+	New: func() interface{} {
+		ctx := C.ZSTD_createDCtx()
+		z := &zctx{ctx}
+		runtime.SetFinalizer(z, func(z *zctx) {
+			C.ZSTD_freeDCtx(z.ctx)
+		})
+		return z
+	},
+}
+
 // Decompress src into dst.  If you have a buffer to use, you can pass it to
 // prevent allocation.  If it is too small, or if nil is passed, a new buffer
 // will be allocated and returned.
@@ -143,7 +160,11 @@ func Decompress(dst, src []byte) ([]byte, error) {
 		dst = make([]byte, bound)
 	}
 
-	written := int(C.ZSTD_decompress(
+	ctx := pool.Get().(*zctx)
+	defer pool.Put(ctx)
+	C.ZSTD_initDCtx_internal(ctx.ctx)
+	written := int(C.ZSTD_decompressDCtx(
+		ctx.ctx,
 		unsafe.Pointer(&dst[0]),
 		C.size_t(len(dst)),
 		unsafe.Pointer(&src[0]),
