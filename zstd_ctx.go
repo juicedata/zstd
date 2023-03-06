@@ -32,14 +32,14 @@ type ctx struct {
 }
 
 // Create a new ZStd Context.
-//  When compressing/decompressing many times, it is recommended to allocate a
-//  context just once, and re-use it for each successive compression operation.
-//  This will make workload friendlier for system's memory.
-//  Note : re-using context is just a speed / resource optimization.
-//         It doesn't change the compression ratio, which remains identical.
-//  Note 2 : In multi-threaded environments,
-//         use one different context per thread for parallel execution.
 //
+//	When compressing/decompressing many times, it is recommended to allocate a
+//	context just once, and re-use it for each successive compression operation.
+//	This will make workload friendlier for system's memory.
+//	Note : re-using context is just a speed / resource optimization.
+//	       It doesn't change the compression ratio, which remains identical.
+//	Note 2 : In multi-threaded environments,
+//	       use one different context per thread for parallel execution.
 func NewCtx() Ctx {
 	c := &ctx{
 		cctx: C.ZSTD_createCCtx(),
@@ -93,15 +93,8 @@ func (c *ctx) CompressLevel(dst, src []byte, level int) ([]byte, error) {
 }
 
 func (c *ctx) Decompress(dst, src []byte) ([]byte, error) {
-	if len(src) == 0 {
-		return []byte{}, ErrEmptySlice
-	}
-
-	bound := decompressSizeHint(src)
-	if cap(dst) >= bound {
-		dst = dst[0:cap(dst)]
-	} else {
-		dst = make([]byte, bound)
+	if len(dst) == 0 {
+		dst = make([]byte, decompressSizeHint(src))
 	}
 
 	written := int(C.ZSTD_decompressDCtx(

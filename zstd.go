@@ -107,9 +107,6 @@ func CompressLevel(dst, src []byte, level int) ([]byte, error) {
 // prevent allocation.  If it is too small, or if nil is passed, a new buffer
 // will be allocated and returned.
 func Decompress(dst, src []byte) ([]byte, error) {
-	if len(src) == 0 {
-		return []byte{}, ErrEmptySlice
-	}
 	c := pool.Get().(*ctx)
 	defer pool.Put(c)
 	return c.Decompress(dst, src)
