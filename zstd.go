@@ -4,15 +4,14 @@ package zstd
 // support decoding of "legacy" zstd payloads from versions [0.4, 0.8], matching the
 // default configuration of the zstd command line tool:
 // https://github.com/facebook/zstd/blob/dev/programs/README.md
-#cgo CFLAGS: -DZSTD_LEGACY_SUPPORT=4 -DZSTD_MULTITHREAD=1
+#cgo CFLAGS: -DZSTD_LEGACY_SUPPORT=4
 
 #include "zstd.h"
 */
 import "C"
 import (
-	"bytes"
 	"errors"
-	"io/ioutil"
+	"sync"
 	"unsafe"
 )
 
@@ -91,41 +90,17 @@ func Compress(dst, src []byte) ([]byte, error) {
 	return CompressLevel(dst, src, DefaultCompression)
 }
 
+var pool = sync.Pool{
+	New: func() interface{} {
+		return NewCtx()
+	},
+}
+
 // CompressLevel is the same as Compress but you can pass a compression level
 func CompressLevel(dst, src []byte, level int) ([]byte, error) {
-	bound := CompressBound(len(src))
-	if cap(dst) >= bound {
-		dst = dst[0:bound] // Reuse dst buffer
-	} else {
-		dst = make([]byte, bound)
-	}
-
-	// We need unsafe.Pointer(&src[0]) in the Cgo call to avoid "Go pointer to Go pointer" panics.
-	// This means we need to special case empty input. See:
-	// https://github.com/golang/go/issues/14210#issuecomment-346402945
-	var cWritten C.size_t
-	if len(src) == 0 {
-		cWritten = C.ZSTD_compress(
-			unsafe.Pointer(&dst[0]),
-			C.size_t(len(dst)),
-			unsafe.Pointer(nil),
-			C.size_t(0),
-			C.int(level))
-	} else {
-		cWritten = C.ZSTD_compress(
-			unsafe.Pointer(&dst[0]),
-			C.size_t(len(dst)),
-			unsafe.Pointer(&src[0]),
-			C.size_t(len(src)),
-			C.int(level))
-	}
-
-	written := int(cWritten)
-	// Check if the return is an Error code
-	if err := getError(written); err != nil {
-		return nil, err
-	}
-	return dst[:written], nil
+	c := pool.Get().(*ctx)
+	defer pool.Put(c)
+	return c.CompressLevel(dst, src, level)
 }
 
 // Decompress src into dst.  If you have a buffer to use, you can pass it to
@@ -135,26 +110,9 @@ func Decompress(dst, src []byte) ([]byte, error) {
 	if len(src) == 0 {
 		return []byte{}, ErrEmptySlice
 	}
-
-	bound := decompressSizeHint(src)
-	if cap(dst) >= bound {
-		dst = dst[0:cap(dst)]
-	} else {
-		dst = make([]byte, bound)
-	}
-
-	written, err := DecompressInto(dst, src)
-	if err == nil {
-		return dst[:written], nil
-	}
-	if !IsDstSizeTooSmallError(err) {
-		return nil, err
-	}
-
-	// We failed getting a dst buffer of correct size, use stream API
-	r := NewReader(bytes.NewReader(src))
-	defer r.Close()
-	return ioutil.ReadAll(r)
+	c := pool.Get().(*ctx)
+	defer pool.Put(c)
+	return c.Decompress(dst, src)
 }
 
 // DecompressInto decompresses src into dst. Unlike Decompress, DecompressInto
